@@ -1,0 +1,198 @@
+{
+  "schema_name": "referred_person_emotion_annotation",
+  "version": "1.0",
+  "guidelines": [
+    "Label what each person SHOWS (face and body), not what the scene suggests.",
+    "Use 'cant_tell' whenever the face is not readable; do not guess.",
+    "Label every visible person who is not excluded, not only the most prominent one."
+  ],
+
+  "image_questions": [
+    {
+      "id": "scene_mood",
+      "question": "What is the overall mood of the scene?",
+      "type": "single_choice",
+      "required": true,
+      "options": [
+        {"value": "neutral",   "label": "Neutral"},
+        {"value": "happy",     "label": "Happy"},
+        {"value": "sad",       "label": "Sad"},
+        {"value": "angry",     "label": "Angry"},
+        {"value": "fearful",   "label": "Fearful"},
+        {"value": "surprised", "label": "Surprised"},
+        {"value": "disgusted", "label": "Disgusted"},
+        {"value": "mixed",     "label": "Mixed / no single mood"}
+      ]
+    },
+    {
+      "id": "scene_strength",
+      "question": "How strong is that mood?",
+      "type": "single_choice",
+      "required": false,
+      "show_if": {"scene_mood": {"not_in": ["neutral", "mixed"]}},
+      "options": [
+        {"value": "weak",   "label": "Weak"},
+        {"value": "strong", "label": "Strong"}
+      ]
+    }
+  ],
+
+  "person_questions": [
+    {
+      "id": "box_check",
+      "question": "Is the bounding box for this person correct?",
+      "type": "single_choice",
+      "required": true,
+      "prefilled_by": "SAM 3",
+      "options": [
+        {"value": "correct", "label": "Correct"},
+        {"value": "adjust",  "label": "Adjust", "description": "Too loose, too tight, or cut off: redraw the box"},
+        {"value": "wrong",   "label": "Wrong", "description": "Two people merged, or not a person"},
+        {"value": "exclude", "label": "Exclude", "description": "Tiny background person or not relevant: skip all other questions"}
+      ]
+    },
+    {
+      "id": "emotion",
+      "question": "What emotion does this person show?",
+      "type": "single_choice",
+      "required": true,
+      "show_if": {"box_check": {"not_in": ["wrong", "exclude"]}},
+      "options": [
+        {"value": "neutral",   "label": "Neutral"},
+        {"value": "happy",     "label": "Happy"},
+        {"value": "sad",       "label": "Sad"},
+        {"value": "angry",     "label": "Angry"},
+        {"value": "fearful",   "label": "Fearful"},
+        {"value": "surprised", "label": "Surprised"},
+        {"value": "disgusted", "label": "Disgusted"},
+        {"value": "cant_tell", "label": "Can't tell", "description": "Face not readable (turned away, covered, too small or blurry)"}
+      ]
+    },
+    {
+      "id": "confidence",
+      "question": "How sure are you about the emotion?",
+      "type": "single_choice",
+      "required": true,
+      "show_if": {"emotion": {"not_in": ["cant_tell"]}},
+      "options": [
+        {"value": 1, "label": "Guess"},
+        {"value": 2, "label": "Fairly sure"},
+        {"value": 3, "label": "Certain"}
+      ]
+    },
+    {
+      "id": "emotion_second",
+      "question": "Second most likely emotion (optional)",
+      "type": "single_choice",
+      "required": false,
+      "show_if": {"emotion": {"not_in": ["cant_tell"]}, "confidence": {"in": [1, 2]}},
+      "options": [
+        {"value": "none",      "label": "None"},
+        {"value": "neutral",   "label": "Neutral"},
+        {"value": "happy",     "label": "Happy"},
+        {"value": "sad",       "label": "Sad"},
+        {"value": "angry",     "label": "Angry"},
+        {"value": "fearful",   "label": "Fearful"},
+        {"value": "surprised", "label": "Surprised"},
+        {"value": "disgusted", "label": "Disgusted"}
+      ]
+    },
+    {
+      "id": "visibility",
+      "question": "How visible is this person's face?",
+      "type": "single_choice",
+      "required": true,
+      "show_if": {"box_check": {"not_in": ["wrong", "exclude"]}},
+      "options": [
+        {"value": "frontal",        "label": "Fully visible, facing the camera"},
+        {"value": "turned",         "label": "Visible but turned", "description": "Three-quarter or profile view"},
+        {"value": "partly_covered", "label": "Partly covered"},
+        {"value": "mostly_hidden",  "label": "Mostly hidden", "description": "Back of head turned, or face covered"},
+        {"value": "too_small",      "label": "Visible but too small or blurry to read"}
+      ]
+    },
+    {
+      "id": "hidden_region",
+      "question": "Which part of the face is hidden?",
+      "type": "multi_choice",
+      "required": false,
+      "show_if": {"visibility": {"in": ["partly_covered", "mostly_hidden"]}},
+      "options": [
+        {"value": "upper",      "label": "Eyes / upper face"},
+        {"value": "lower",      "label": "Mouth / lower face"},
+        {"value": "side",       "label": "One side of the face"},
+        {"value": "whole",      "label": "Whole face"}
+      ]
+    },
+    {
+      "id": "occlusion_cause",
+      "question": "What is covering the face?",
+      "type": "multi_choice",
+      "required": false,
+      "show_if": {"visibility": {"in": ["partly_covered", "mostly_hidden"]}},
+      "options": [
+        {"value": "hand",          "label": "Hand"},
+        {"value": "object",        "label": "Object", "description": "Cup, phone, microphone, food, etc."},
+        {"value": "other_person",  "label": "Another person"},
+        {"value": "hair_hat",      "label": "Hair or hat"},
+        {"value": "mask_glasses",  "label": "Mask or sunglasses"},
+        {"value": "image_edge",    "label": "Cut off by the image edge"},
+        {"value": "turned_away",   "label": "Person is turned away"}
+      ]
+    },
+    {
+      "id": "clothing",
+      "question": "Clothing description (edit if needed)",
+      "type": "text",
+      "required": true,
+      "prefilled_by": "clothing model",
+      "show_if": {"box_check": {"not_in": ["wrong", "exclude"]}},
+      "example": "grey hoodie"
+    },
+    {
+      "id": "clothing_unique",
+      "question": "Does this clothing description match only this person in the image?",
+      "type": "single_choice",
+      "required": true,
+      "show_if": {"box_check": {"not_in": ["wrong", "exclude"]}},
+      "options": [
+        {"value": true,  "label": "Yes, unique"},
+        {"value": false, "label": "No, another person matches too"}
+      ]
+    }
+  ],
+
+  "output_example": {
+    "image_id": "COCO_train2014_000000165757",
+    "scene_mood": "happy",
+    "scene_strength": "strong",
+    "people": [
+      {
+        "person_id": 3,
+        "box": [412, 88, 590, 470],
+        "box_check": "correct",
+        "emotion": "sad",
+        "confidence": 2,
+        "emotion_second": "neutral",
+        "visibility": "partly_covered",
+        "hidden_region": ["lower"],
+        "occlusion_cause": ["hand"],
+        "clothing": "grey hoodie",
+        "clothing_edited": false,
+        "clothing_unique": true
+      },
+      {
+        "person_id": 4,
+        "box": [120, 60, 300, 455],
+        "box_check": "correct",
+        "emotion": "cant_tell",
+        "visibility": "mostly_hidden",
+        "hidden_region": ["whole"],
+        "occlusion_cause": ["turned_away"],
+        "clothing": "red striped shirt",
+        "clothing_edited": true,
+        "clothing_unique": true
+      }
+    ]
+  }
+}

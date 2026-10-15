@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Emotion Annotator</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --text:#1b1f24; --muted:#667085; --line:#dfe3e8;
+    --accent:#2f6fed; --ok:#1f9d55; --err:#d64545; --tagbg:#fff6dc; --tag:#8a6510;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#121417; --card:#1c1f24; --text:#e8eaed; --muted:#9aa3ad; --line:#2f353d;
+      --accent:#5b8cff; --tagbg:#2e2715; --tag:#f0c75e; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  button{font:inherit;color:inherit;cursor:pointer}
+
+  header{max-width:1500px;margin:0 auto;padding:12px 20px 0}
+  .meta{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
+  .meta b{color:var(--text)}
+  .bar{height:4px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+  #barfill{height:100%;width:0;background:var(--accent);transition:width .25s}
+
+  main{max-width:1500px;margin:0 auto;padding:14px 20px;display:grid;
+    grid-template-columns:minmax(0,1fr) 400px;gap:24px;align-items:start}
+  .viewer{display:flex;justify-content:center;align-items:center;background:#0d0f12;border-radius:12px;
+    overflow:hidden;height:calc(100vh - 80px)}
+  canvas{display:block;touch-action:none}
+
+  .panel{height:calc(100vh - 80px);display:flex;flex-direction:column}
+  .form{flex:1;overflow-y:auto;padding-right:6px}
+  .section{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    margin:4px 0 10px;display:flex;justify-content:space-between;gap:8px}
+  .section span{font-weight:400;letter-spacing:0;text-transform:none}
+  .section:not(:first-child){margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+
+  .q{margin-bottom:16px;border-radius:10px}
+  .q[hidden]{display:none}
+  .q h3{font-size:14.5px;font-weight:600;margin:0 0 7px;display:flex;align-items:center;gap:8px}
+  .q h3 .opt-tag{font-size:12px;font-weight:400;color:var(--muted)}
+  .q.missing h3{color:var(--err)}
+  .q.missing .opts .opt{border-color:var(--err)}
+  .opts{display:flex;flex-wrap:wrap;gap:6px}
+  .opt{position:relative;display:flex;flex-direction:column;align-items:flex-start;padding:7px 11px;text-align:left;
+    background:var(--card);border:1.5px solid var(--line);border-radius:9px}
+  .opts.grid{display:grid;grid-template-columns:1fr 1fr}
+  .opt.wide{flex-basis:100%;grid-column:1/-1}
+  .opt:hover{border-color:var(--accent)}
+  .opt.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+  .opt small{font-size:12px;opacity:.7}
+  .opt .key{position:absolute;top:2px;right:5px;font-size:10px;opacity:.5}
+  .opt .ds{font-size:10.5px;padding:0 6px;border-radius:999px;background:var(--tagbg);color:var(--tag);margin-top:2px}
+  .multi .opt.sel::before{content:"✓ ";}
+
+  .tag{display:none;font-size:12px;font-weight:400;padding:1px 8px;border-radius:999px;background:var(--tagbg);color:var(--tag)}
+  .tag.on{display:inline-block}
+  textarea{width:100%;min-height:70px;resize:vertical;font:inherit;padding:9px 11px;
+    border:1.5px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .q.missing textarea{border-color:var(--err)}
+  .linkbtn{background:none;border:0;padding:4px 0;font-size:13px;color:var(--accent)}
+  .linkbtn[hidden]{display:none}
+
+  .boxtools{margin:-6px 0 16px;padding:9px 11px;border-radius:9px;background:var(--tagbg);color:var(--tag);font-size:13px}
+  .boxtools[hidden]{display:none}
+  .boxtools .coords{font-variant-numeric:tabular-nums;opacity:.85}
+
+  .foot{border-top:1px solid var(--line);padding-top:10px}
+  .nav{display:flex;gap:10px}
+  .nav button{height:44px;border-radius:10px;font-weight:600;border:1.5px solid var(--line);background:var(--card)}
+  #backBtn,#skipBtn{flex:0 0 90px}
+  #nextBtn{flex:1;background:var(--accent);border-color:var(--accent);color:#fff}
+  .nav button:disabled{opacity:.4;cursor:default}
+  .status{margin-top:8px;font-size:13px;color:var(--muted);min-height:18px}
+  .status.err{color:var(--err)}
+  .hint{margin-top:4px;font-size:12px;color:var(--muted)}
+  kbd{font:inherit;font-size:11px;padding:1px 5px;border:1px solid var(--line);border-radius:4px;background:var(--card)}
+
+  #doneView{display:none;text-align:center;padding:80px 20px}
+  #doneView button{height:44px;padding:0 20px;margin:6px;border-radius:10px;border:1.5px solid var(--line);background:var(--card)}
+  body.done #doneView{display:block}
+  body.done main{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="meta"><span id="pos">Loading…</span><span id="doneCount"></span></div>
+  <div class="bar"><div id="barfill"></div></div>
+</header>
+
+<main>
+  <div class="viewer" id="viewer"><canvas id="cv"></canvas></div>
+
+  <section class="panel">
+    <div class="form">
+      <div class="section">Scene <span id="sceneNote"></span></div>
+      <div id="sceneQs"></div>
+      <div class="section">Highlighted person <span id="personNote"></span></div>
+      <div id="personQs"></div>
+    </div>
+
+    <div class="foot">
+      <div class="nav">
+        <button id="backBtn" type="button">Back</button>
+        <button id="skipBtn" type="button" title="Skip this person without saving (e.g. too hidden to annotate)">Skip</button>
+        <button id="nextBtn" type="button">Next</button>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="hint">
+        <kbd>1</kbd>–<kbd>8</kbd> emotion · <kbd>Enter</kbd> save &amp; next · <kbd>←</kbd> back · <kbd>S</kbd> skip ·
+        <kbd>E</kbd> edit clothing (<kbd>Ctrl</kbd>+<kbd>Enter</kbd> save, <kbd>Esc</kbd> leave)
+      </div>
+    </div>
+  </section>
+</main>
+
+<section id="doneView">
+  <h1>All done 🎉</h1>
+  <p id="doneText"></p>
+  <button id="reviewBtn" type="button">Review from start</button>
+  <button id="lastBtn" type="button">Back to last person</button>
+</section>
+
+<script>
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d'), nextBtn = $('#nextBtn'), backBtn = $('#backBtn'), skipBtn = $('#skipBtn');
+const S = {
+  schema: null, total: 0, index: 0, item: null, img: null, busy: false,
+  scene: {}, person: {},     // answers, keyed by question id
+  box: null,                 // edited box [x1,y1,x2,y2] in original image pixels
+  scale: 1,                  // CSS px per image px
+};
+const BOX_Q = 'box_check', EMO_Q = 'emotion', TEXT_Q = 'clothing', SCENE_Q = 'scene_mood';
+// question id -> item field holding the dataset's label, shown as a "dataset" tag
+const DATASET_TAG = {[EMO_Q]: 'emotion', [SCENE_Q]: 'scene_dataset'};
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    let msg = r.status + ' ' + r.statusText;
+    try { msg = (await r.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+function status(msg, err=false) { const s = $('#status'); s.textContent = msg; s.classList.toggle('err', err); }
+
+const imgCache = new Map();
+function loadImg(url) {
+  if (!imgCache.has(url)) {
+    imgCache.set(url, new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => { imgCache.delete(url); rej(new Error('Could not load image')); };
+      im.src = url;
+    }));
+  }
+  return imgCache.get(url);
+}
+
+/* ---------- schema logic (mirrors visible_ids in app.py) ---------- */
+// Hidden reference -> hide. Unanswered reference -> `not_in` shows, `in` hides.
+function visibleIds(questions, answers) {
+  const shown = new Set();
+  for (const q of questions) {
+    let ok = true;
+    for (const [ref, c] of Object.entries(q.show_if || {})) {
+      if (!shown.has(ref)) ok = false;
+      else if (!(ref in answers)) ok = !('in' in c);
+      else if ('in' in c) ok = c.in.includes(answers[ref]);
+      else ok = !(c.not_in || []).includes(answers[ref]);
+      if (!ok) break;
+    }
+    if (ok) shown.add(q.id);
+  }
+  return shown;
+}
+const isEmpty = v => v === undefined || v === '' || (Array.isArray(v) && !v.length);
+function payload(questions, answers) {
+  const shown = visibleIds(questions, answers), out = {}, missing = [];
+  for (const q of questions) {
+    if (!shown.has(q.id)) continue;
+    if (!isEmpty(answers[q.id])) out[q.id] = q.type === 'text' ? answers[q.id].trim() : answers[q.id];
+    else if (q.required) missing.push(q.id);
+  }
+  return {out, missing};
+}
+
+/* ---------- form ---------- */
+function buildForm(container, questions, answersKey) {
+  container.innerHTML = '';
+  for (const q of questions) {
+    const el = document.createElement('div');
+    el.className = 'q'; el.dataset.id = q.id;
+    const h = document.createElement('h3');
+    h.textContent = q.question;
+    if (!q.required) h.insertAdjacentHTML('beforeend', ' <span class="opt-tag">optional</span>');
+    el.append(h);
+
+    if (q.type === 'text') {
+      h.insertAdjacentHTML('beforeend', '<span class="tag">Edited</span>');
+      const ta = document.createElement('textarea');
+      ta.placeholder = q.example ? 'e.g. ' + q.example : '';
+      ta.addEventListener('input', () => { S[answersKey][q.id] = ta.value; render(); });
+      const reset = document.createElement('button');
+      reset.type = 'button'; reset.className = 'linkbtn'; reset.textContent = 'Restore original text';
+      reset.onclick = () => { S[answersKey][q.id] = S.item.description; render(); };
+      el.append(ta, reset);
+    } else {
+      const opts = document.createElement('div');
+      opts.className = 'opts' + (q.type === 'multi_choice' ? ' multi' : '');
+      const wide = o => o.description || o.label.length > 20;
+      if (q.options.some(wide)) opts.classList.add('grid');
+      q.options.forEach((o, n) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'opt' + (wide(o) ? ' wide' : ''); b.dataset.n = n;
+        b.innerHTML = `<span></span>${o.description ? '<small></small>' : ''}`;
+        b.firstChild.textContent = o.label;
+        if (o.description) b.lastChild.textContent = o.description;
+        if (q.id === EMO_Q && n < 9) b.insertAdjacentHTML('beforeend', `<span class="key">${n + 1}</span>`);
+        if (q.id in DATASET_TAG) b.insertAdjacentHTML('beforeend', '<span class="ds" hidden>dataset</span>');
+        b.onclick = () => choose(answersKey, q, o.value);
+        opts.append(b);
+      });
+      el.append(opts);
+    }
+    container.append(el);
+    if (q.id === BOX_Q) {
+      container.insertAdjacentHTML('beforeend', `<div class="boxtools" id="boxtools">
+        Drag a corner or edge to resize, drag inside to move, or drag outside to draw a new box.
+        <div><span class="coords" id="coords"></span> · <button type="button" class="linkbtn" id="boxReset">Reset to original</button></div>
+      </div>`);
+      $('#boxReset').onclick = () => { S.box = [...S.item.bbox]; render(); };
+    }
+  }
+}
+
+function choose(answersKey, q, v) {
+  const a = S[answersKey];
+  if (q.type === 'multi_choice') {
+    const cur = a[q.id] || [];
+    a[q.id] = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v];
+  } else if (a[q.id] === v && !q.required) {
+    delete a[q.id];                                   // click again to clear an optional answer
+  } else {
+    a[q.id] = v;
+  }
+  document.querySelector(`.q[data-id="${q.id}"]`)?.classList.remove('missing');
+  render();
+}
+
+function renderForm(container, questions, answers) {
+  const shown = visibleIds(questions, answers);
+  for (const q of questions) {
+    const el = container.querySelector(`.q[data-id="${q.id}"]`);
+    el.hidden = !shown.has(q.id);
+    if (q.type === 'text') {
+      const ta = el.querySelector('textarea'), v = answers[q.id] ?? '';
+      if (ta.value !== v) ta.value = v;
+      const edited = q.prefilled_by && S.item.description && v.trim() !== S.item.description.trim();
+      el.querySelector('.tag').classList.toggle('on', !!edited);
+      el.querySelector('.linkbtn').hidden = !edited;
+    } else {
+      el.querySelectorAll('.opt').forEach(b => {
+        const v = q.options[b.dataset.n].value, cur = answers[q.id];
+        b.classList.toggle('sel', q.type === 'multi_choice' ? (cur || []).includes(v) : cur === v);
+        const ds = b.querySelector('.ds');
+        if (ds) ds.hidden = v !== S.item[DATASET_TAG[q.id]];
+      });
+    }
+  }
+}
+
+const adjusting = () => S.person[BOX_Q] === 'adjust';
+const shownBox = () => adjusting() ? S.box : S.item.bbox;
+
+function render() {
+  if (S.item) {
+    renderForm($('#sceneQs'), S.schema.image_questions, S.scene);
+    renderForm($('#personQs'), S.schema.person_questions, S.person);
+    $('#boxtools').hidden = !adjusting();
+    $('#coords').textContent = S.box ? 'box ' + S.box.map(v => Math.round(v)).join(', ') + ' px' : '';
+    draw();
+  }
+  nextBtn.disabled = S.busy;
+  skipBtn.disabled = S.busy || !S.item;
+  backBtn.disabled = S.busy || S.index === 0;
+  nextBtn.textContent = S.index === S.total - 1 ? 'Save & finish' : 'Next';
+}
+
+/* ---------- drawing ---------- */
+function draw() {
+  if (!S.img || !S.item) return;
+  const W = S.img.naturalWidth, H = S.img.naturalHeight, v = $('#viewer');
+  const scale = S.scale = Math.min(v.clientWidth / W, v.clientHeight / H);
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.width = Math.round(W * scale) + 'px'; cv.style.height = Math.round(H * scale) + 'px';
+  cv.width = Math.round(W * scale * dpr); cv.height = Math.round(H * scale * dpr);
+  const k = scale * dpr;
+  ctx.setTransform(k, 0, 0, k, 0, 0);       // from here on, draw in original image pixels
+  ctx.drawImage(S.img, 0, 0);
+
+  const [x1, y1, x2, y2] = shownBox();
+  // dim everything except the current person
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.rect(x1, y1, x2 - x1, y2 - y1); ctx.fill('evenodd');
+  // other people: thin dashed
+  ctx.setLineDash([6 / scale, 5 / scale]); ctx.lineWidth = 1.5 / scale; ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  for (const [a, b, c, d] of S.item.other_boxes) ctx.strokeRect(a, b, c - a, d - b);
+  if (adjusting()) {                         // original box, for reference
+    const [a, b, c, d] = S.item.bbox;
+    ctx.setLineDash([3 / scale, 3 / scale]); ctx.strokeStyle = 'rgba(255,212,0,0.7)';
+    ctx.strokeRect(a, b, c - a, d - b);
+  }
+  // current person: thick, high-contrast
+  ctx.setLineDash([]);
+  const col = adjusting() ? '#00d1ff' : '#ffd400';
+  ctx.lineWidth = 5 / scale; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  ctx.lineWidth = 3 / scale; ctx.strokeStyle = col;                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  if (adjusting()) {
+    const s = 9 / scale, mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    ctx.fillStyle = col; ctx.strokeStyle = '#000'; ctx.lineWidth = 1 / scale;
+    for (const [hx, hy] of [[x1,y1],[mx,y1],[x2,y1],[x2,my],[x2,y2],[mx,y2],[x1,y2],[x1,my]]) {
+      ctx.fillRect(hx - s/2, hy - s/2, s, s); ctx.strokeRect(hx - s/2, hy - s/2, s, s);
+    }
+  }
+}
+addEventListener('resize', () => requestAnimationFrame(draw));
+
+/* ---------- box editing (all maths in original image pixels) ---------- */
+let drag = null;
+function toImage(e) {
+  const r = cv.getBoundingClientRect();
+  const W = S.img.naturalWidth, H = S.img.naturalHeight;
+  return [Math.min(W, Math.max(0, (e.clientX - r.left) / S.scale)),
+          Math.min(H, Math.max(0, (e.clientY - r.top) / S.scale))];
+}
+function hitTest([x, y]) {
+  const [x1, y1, x2, y2] = S.box, t = 10 / S.scale;
+  const inX = x > x1 - t && x < x2 + t, inY = y > y1 - t && y < y2 + t;
+  const near = (v, a, b) => Math.abs(v - a) < t && Math.abs(v - a) <= Math.abs(v - b);  // closer edge wins on small boxes
+  const h = {l: inY && near(x, x1, x2), r: inY && !near(x, x1, x2) && near(x, x2, x1),
+             t: inX && near(y, y1, y2), b: inX && !near(y, y1, y2) && near(y, y2, y1)};
+  if (h.l || h.r || h.t || h.b) return {mode: 'resize', ...h};
+  if (x > x1 && x < x2 && y > y1 && y < y2) return {mode: 'move'};
+  return {mode: 'new'};
+}
+function cursorFor(h) {
+  if (h.mode === 'move') return 'move';
+  if (h.mode === 'new') return 'crosshair';
+  if ((h.l && h.t) || (h.r && h.b)) return 'nwse-resize';
+  if ((h.r && h.t) || (h.l && h.b)) return 'nesw-resize';
+  return h.l || h.r ? 'ew-resize' : 'ns-resize';
+}
+cv.addEventListener('pointerdown', e => {
+  if (!adjusting() || !S.box || e.button !== 0) return;
+  const p = toImage(e);
+  drag = {...hitTest(p), start: p, box: [...S.box]};
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (!S.img) return;
+  if (!adjusting()) { cv.style.cursor = ''; return; }
+  const p = toImage(e);
+  if (!drag) { cv.style.cursor = cursorFor(hitTest(p)); return; }
+  const W = S.img.naturalWidth, H = S.img.naturalHeight, [sx, sy] = drag.start;
+  let [x1, y1, x2, y2] = drag.box;
+  if (drag.mode === 'new') {
+    [x1, y1, x2, y2] = [sx, sy, p[0], p[1]];
+  } else if (drag.mode === 'move') {
+    const dx = Math.min(W - x2, Math.max(-x1, p[0] - sx)), dy = Math.min(H - y2, Math.max(-y1, p[1] - sy));
+    x1 += dx; x2 += dx; y1 += dy; y2 += dy;
+  } else {
+    if (drag.l) x1 = p[0]; if (drag.r) x2 = p[0];
+    if (drag.t) y1 = p[1]; if (drag.b) y2 = p[1];
+  }
+  S.box = [Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)];
+  render();
+});
+function endDrag() {
+  if (!drag) return;
+  const [x1, y1, x2, y2] = S.box;
+  if (x2 - x1 < 4 || y2 - y1 < 4) S.box = drag.box;    // ignore clicks / tiny boxes
+  drag = null; render();
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+/* ---------- navigation ---------- */
+const pick = (questions, obj) =>
+  Object.fromEntries(questions.filter(q => obj && q.id in obj).map(q => [q.id, obj[q.id]]));
+
+// top right: position out of the total, plus how many samples have been kept (saved)
+function showCounts(i, total, kept) {
+  $('#doneCount').innerHTML = `Sample <b>${i + 1}</b>/${total} · <b>${kept}</b> kept`;
+  $('#barfill').style.width = (100 * (i + 1) / Math.max(1, total)) + '%';
+}
+
+async function load(i) {
+  if (i >= S.total) return showDone();
+  i = Math.max(0, i);
+  S.busy = true; render();
+  try {
+    const d = await api(`/api/item/${i}`);
+    const img = await loadImg(d.image_url);
+    const a = d.annotation, it = d.item;
+    Object.assign(S, {
+      index: i, item: it, img,
+      scene: pick(S.schema.image_questions, d.scene),
+      person: pick(S.schema.person_questions, a || d.prefill),
+      box: [...(a ? a.box : it.bbox)],
+    });
+    document.querySelectorAll('.q.missing').forEach(el => el.classList.remove('missing'));
+
+    $('#pos').textContent = `${it.filename} · person ${it.person + 1} of ${it.people_in_image}`;
+    $('#sceneNote').textContent = it.people_in_image > 1 ? `shared by all ${it.people_in_image} people` : '';
+    $('#personNote').textContent = `${it.person + 1} of ${it.people_in_image}`;
+    showCounts(i, d.total, d.done);
+    status(a ? 'Already annotated. Saving overwrites the previous answer.'
+             : d.legacy ? 'Emotion and clothing pre-filled from your earlier annotation.' : '');
+    document.body.classList.remove('done');
+    history.replaceState(null, '', '#' + i);
+    $('.form').scrollTop = 0;
+
+    S.busy = false;
+    render();
+    if (d.next_image_url) loadImg(d.next_image_url).catch(() => {});   // preload
+  } catch (e) {
+    S.busy = false; render(); status(e.message, true);
+  }
+}
+async function next() {
+  if (S.busy || !S.item) return;
+  const sc = payload(S.schema.image_questions, S.scene), pe = payload(S.schema.person_questions, S.person);
+  const missing = [...sc.missing, ...pe.missing];
+  if (missing.length) {
+    missing.forEach(id => document.querySelector(`.q[data-id="${id}"]`).classList.add('missing'));
+    document.querySelector(`.q[data-id="${missing[0]}"]`).scrollIntoView({block: 'center', behavior: 'smooth'});
+    return status(`Answer the ${missing.length} question${missing.length > 1 ? 's' : ''} marked in red.`, true);
+  }
+  S.busy = true; render();
+  try {
+    const d = await api('/api/annotate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({index: S.index, scene: sc.out, person: pe.out, box: S.box,
+                            image_size: [S.img.naturalWidth, S.img.naturalHeight]})
+    });
+    S.busy = false;
+    document.activeElement?.blur();
+    await load(d.next);
+  } catch (e) {
+    S.busy = false; render(); status('Not saved: ' + e.message, true);
+  }
+}
+function back() { if (!S.busy && S.index > 0) load(S.index - 1); }
+// Move on without saving anything for this person (an earlier saved answer, if any, is left as is).
+function skip() { if (!S.busy && S.item) load(S.index + 1); }
+async function showDone() {
+  document.body.classList.add('done');
+  history.replaceState(null, '', '#done');
+  try {
+    const c = await api('/api/config');
+    $('#doneText').textContent = `${c.done} of ${c.total} samples kept.`;
+  } catch {}
+}
+nextBtn.onclick = next;
+backBtn.onclick = back;
+skipBtn.onclick = skip;
+$('#reviewBtn').onclick = () => load(0);
+$('#lastBtn').onclick = () => load(S.total - 1);
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown', e => {
+  if (document.body.classList.contains('done')) return;
+  if (e.target.tagName === 'TEXTAREA') {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); next(); }
+    if (e.key === 'Escape') e.target.blur();
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const n = parseInt(e.key, 10), emo = S.schema?.person_questions.find(q => q.id === EMO_Q);
+  const emoShown = emo && !document.querySelector(`.q[data-id="${EMO_Q}"]`).hidden;
+  if (emoShown && n >= 1 && n <= emo.options.length) choose('person', emo, emo.options[n - 1].value);
+  else if (e.key === 'Enter') { e.preventDefault(); next(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
+  else if (e.key === 's' || e.key === 'S') { e.preventDefault(); skip(); }
+  else if (e.key === 'e' || e.key === 'E') {
+    const ta = document.querySelector(`.q[data-id="${TEXT_Q}"]:not([hidden]) textarea`);
+    if (ta) { e.preventDefault(); ta.focus(); }
+  }
+});
+
+/* ---------- start ---------- */
+(async () => {
+  try {
+    const c = await api('/api/config');
+    S.schema = c.schema; S.total = c.total;
+    buildForm($('#sceneQs'), S.schema.image_questions, 'scene');
+    buildForm($('#personQs'), S.schema.person_questions, 'person');
+    if (!S.total) { $('#pos').textContent = 'No people found. Check the metadata JSON.'; return; }
+    const h = parseInt(location.hash.slice(1), 10);
+    await load(Number.isInteger(h) && h >= 0 && h < S.total ? h : c.resume);
+  } catch (e) { status(e.message, true); }
+})();
+</script>
+</body>
+</html>
